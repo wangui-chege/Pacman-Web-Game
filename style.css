@@ -1,0 +1,47 @@
+body {
+    background-color: black;
+    color: white;
+    text-align: center;
+    font-family: Arial;
+}
+
+#game-board {
+    width: 600px;
+    height: 600px;
+    margin: auto;
+    background-color: #1a1a2e;
+
+    display: grid;
+    grid-template-columns: repeat(28, 1fr);
+    grid-template-rows: repeat(31, 1fr);
+}
+
+.wall {
+    background-color: #0b5351;
+    border-radius: 6px;
+
+    width: 90%;
+    height: 90%;
+
+    margin: auto;
+}
+
+.dot {
+    background-color: white;
+    width: 30%;
+    height: 30%;
+    border-radius: 50%;
+    margin: auto;
+}
+
+.empty {
+    background-color: transparent;
+}
+
+.player {
+    background-color: #fbb13c;
+    border-radius: 50%;
+    width: 70%;
+    height: 70%;
+    margin: auto;
+}
