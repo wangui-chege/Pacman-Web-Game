@@ -1,8 +1,10 @@
 console.log("JS is running");
 
 let score = 0;
+let gameOver = false;
+let totalDots = 0;
 
-const layout = [
+let layout = [
     1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
     1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
     1, 0, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0, 1,
@@ -15,7 +17,7 @@ const layout = [
     1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 1,
     1, 1, 1, 0, 0, 0, 0, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 0, 0, 0, 0, 1, 1, 1,
     1, 1, 1, 0, 1, 1, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 1, 1, 0, 1, 1, 1,
-    1, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 1, 0, 0, 1, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 1,
+    1, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 1, 2, 2, 1, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 1,
     1, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 2, 2, 2, 2, 2, 2, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 1,
     1, 1, 1, 0, 1, 1, 0, 0, 0, 0, 1, 2, 2, 2, 2, 2, 2, 1, 0, 0, 0, 0, 1, 1, 0, 1, 1, 1,
     1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 2, 2, 2, 2, 2, 2, 1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 1,
@@ -29,11 +31,14 @@ const layout = [
     1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
     1, 0, 1, 1, 0, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0, 1, 1, 0, 1,
     1, 0, 1, 1, 0, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0, 1, 1, 0, 1,
-    1, 0, 1, 1, 0, 0, 0, 1, 1, 0, 1, 1, 0, 0, 0, 0, 1, 1, 0, 1, 1, 0, 0, 0, 1, 1, 0, 1,
+    1, 0, 1, 1, 0, 0, 0, 1, 1, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 1, 1, 0, 0, 0, 1, 1, 0, 1,
     1, 0, 1, 1, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 1, 1, 0, 1,
-    1, 0, 1, 1, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 1, 1, 0, 1,
+    1, 0, 0, 0, 0, 0, 0, 1, 1, 0, 1, 1, 0, 0, 0, 0, 1, 1, 0, 1, 1, 0, 0, 0, 0, 0, 0, 1,
     1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1
 ];
+
+//the whole game is scanned and the total number of dots is recorded
+totalDots = layout.filter(tile => tile === 0).length;
 
 const gameBoard = document.getElementById("game-board"); 
 
@@ -77,23 +82,34 @@ let playerPos = {
 //let index = row * width + col;
 
 function movePlayer(rowChange, colChange) {
+    if (gameOver) return;
+
     let newRow = playerPos.row + rowChange;
     let newCol = playerPos.col + colChange;
     let newIndex = newRow * 28 + newCol;
 
     // wall check
-    if (layout[newIndex] !== 1) {
-        playerPos.row = newRow;
-        playerPos.col = newCol;
+    if (layout[newIndex] === 1) return;
 
-        if (layout[newIndex] === 0) {
-            score += 10;
-            layout[newIndex] = 2; //remove dot (replace dot with empty space)
-            updateScore();
-        }
+    // move player
+    playerPos.row = newRow;
+    playerPos.col = newCol;
 
-        render(); //update screen after a game event
+    // eat dot
+    if (layout[newIndex] === 0) {
+        score += 10;
+        totalDots--;
+        layout[newIndex] = 2; // dot disappears permanently
+        updateScore();
     }
+
+    // win condition
+    if (totalDots === 0) {
+        gameOver = true;
+        setTimeout(() => alert("You Win!"), 100);
+    }
+
+    render();
 }
 
 document.addEventListener("keydown", function(event) {
@@ -123,5 +139,22 @@ updateScore();
 /* 
 this is to display the score on screen after a dot is eaten
 */
+
+function resetGame() {
+    score = 0;
+    gameOver = false;
+    playerPos = {row: 12, col: 9};
+
+    //restore dots from the original layout
+    layout = layout.map(tile => {
+        if (tile === 2 || tile === 3) return 0;
+        return tile;
+    });
+
+    totalDots = layout.filter(tile => tile === 0).length;
+
+    updateScore();
+    render();
+}
 
 render(); //initialize the game screen
