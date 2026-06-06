@@ -1,13 +1,18 @@
 console.log("JS is running");
 
-let ghost = {
-    row: 13,
-    col: 11
-}
+const originalGhosts = [
+    {name: "blinky", row: 14, col: 12, color: "red", behavior: "chase"},
+    {name: "pinky", row: 14, col: 15, color: "pink", behavior: "ambush"},
+    {name: "inky", row: 15, col: 12, color: "cyan", behavior: "flank"},
+    {name: "clyde", row: 15, col: 15, color: "orange", behavior: "scatter"}
+];
+let ghosts = structuredClone(originalGhosts);
 let score = 0;
 let gameOver = false;
 let totalDots = 0;
+let playerDirection = {r: 0, c: 1};
 
+//this array maps out the whole map, 1 being a wall, 0 being a dot and 2 being empty space
 let layout = [
     1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
     1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
@@ -41,6 +46,8 @@ let layout = [
     1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1
 ];
 
+const originalLayout = [...layout];
+
 //the whole game is scanned and the total number of dots is recorded
 totalDots = layout.filter(tile => tile === 0).length;
 
@@ -54,12 +61,15 @@ function render() {
 
         let row = Math.floor(i / 28);
         let col = i % 28;
+        let ghostHere = ghosts.find(
+            g => g.row === row && g.col === col
+        );
 
         if (row === playerPos.row && col === playerPos.col) {
             tile.classList.add("player");
         }
-        else if (row === ghost.row && col === ghost.col) {
-            tile.classList.add("ghost");
+        else if (ghostHere) {
+            tile.classList.add(ghostHere.name);
         }
         else if (layout[i] === 1) {
             tile.classList.add("wall");
@@ -74,16 +84,34 @@ function render() {
         gameBoard.appendChild(tile);
     }
 }
-/* 
-so far, javascript is reading map data (the layout array), creating
-html elements for each tile, tagging them as wall or dot, and letting 
-css visually render the results (it has the visual properties)
-*/
 
 let playerPos = {
     row: 12,
     col: 9
 };
+
+document.addEventListener("keydown", function(event) {
+
+    if (event.key === "ArrowUp") {
+        playerDirection = {r: -1, c: 0};
+        movePlayer(-1, 0);
+    }
+
+    else if (event.key === "ArrowDown") {
+        playerDirection = {r: 1, c: 0};
+        movePlayer(1, 0);
+    }
+
+    else if (event.key === "ArrowLeft") {
+        playerDirection = {r: 0, c: -1};
+        movePlayer(0, -1);
+    }
+
+    else if (event.key === "ArrowRight") {
+        playerDirection = {r: 0, c: 1};
+        movePlayer(0, 1);
+    }
+});
 
 function movePlayer(rowChange, colChange) {
     if (gameOver) return;
@@ -91,6 +119,13 @@ function movePlayer(rowChange, colChange) {
     let newRow = playerPos.row + rowChange;
     let newCol = playerPos.col + colChange;
     let newIndex = newRow * 28 + newCol;
+
+    if (
+        newRow < 0 ||
+        newRow >= 30 ||
+        newCol < 0 ||
+        newCol >= 28
+    ) return;
 
     // wall check
     if (layout[newIndex] === 1) return;
@@ -116,78 +151,144 @@ function movePlayer(rowChange, colChange) {
     render();
 }
 
-function moveGhost() {
-    let directions = [
-        {r: -1, c: 0}, //up
-        {r: 1, c: 0}, //down
-        {r: 0, c: -1}, //left
-        {r: 0, c: 1} //right
+//one AI system that all ghosts use, the common movement
+function getBestMove(ghost, targetRow, targetCol) {
+    let moves = [
+        {r: -1, c: 0},
+        {r: 1, c: 0},
+        {r: 0, c: -1},
+        {r: 0, c: 1}
     ];
 
-    let randomMove = directions[Math.floor(Math.random() * directions.length)];
+    let bestMove = null;
+    let bestDistance = Infinity;
 
-    let newRow = ghost.row + randomMove.r;
-    let newCol = ghost.col + randomMove.c;
-    let newIndex = newRow * 28 + newCol;
+    for (let move of moves) {
+        let newRow = ghost.row + move.r;
+        let newCol = ghost.col + move.c;
+        let index = newRow * 28 + newCol;
 
-    //move only if not wall
-    if (layout[newIndex] != 1) {
-        ghost.row = newRow;
-        ghost.col = newCol;
+        if (layout[index] === 1) continue;
+        if (
+            newRow < 0 ||
+            newRow >= 30 ||
+            newCol < 0 ||
+            newCol >= 28
+        ) continue;
+
+        let distance = Math.abs(newRow - targetRow) + Math.abs(newCol - targetCol);
+
+        if (distance < bestDistance) {
+            bestDistance = distance;
+            bestMove = move;
+        }
     }
 
-    if (ghost.row === playerPos.row && ghost.col === playerPos.col) {
-        gameOver = true;
-        alert("Game Over!");
-    }
-    render();
+    return bestMove;
 }
 
-document.addEventListener("keydown", function(event) {
-    if (event.key === "ArrowUp") {
-        movePlayer(-1, 0);
+//blinky's movement is that she chases pacdot 
+//for that, blinky is supposed to move to where pacdot is
+function blinkyTarget() {
+    return {
+        row: playerPos.row, 
+        col: playerPos.col
+    };
+}
+
+//wants to cut poor pacdot off
+//targets space 4 tiles ahead of pacdot
+function pinkyTarget() {
+    return {
+        row: playerPos.row + playerDirection.r * 4,
+        col: playerPos.col + playerDirection.c * 4
+    };
+}
+
+//movements are unpredictable
+//calculated using both blinky's and pacdot's positions
+function inkyTarget() {
+    let aheadRow = playerPos.row + playerDirection.r * 2;
+    let aheadCol = playerPos.col + playerDirection.c * 2;
+
+    let blinky = ghosts.find(g => g.name === "blinky");
+
+    return {
+        row: aheadRow + (aheadRow - blinky.row),
+        col: aheadCol + (aheadCol - blinky.col)
+    };
+}
+
+//chases pacdot till he gets close
+//goes back to bottom left corner after that
+function clydeTarget(clyde) {
+    let distance = Math.abs(clyde.row - playerPos.row) + Math.abs(clyde.col - playerPos.col);
+
+    if (distance > 6) {
+        return {row: playerPos.row, col: playerPos.col };
     }
-    else if (event.key === "ArrowDown") {
-        movePlayer(1, 0);
+    else {
+        return {row: 29, col: 1}; //bottom left corner
     }
-    else if (event.key === "ArrowLeft") {
-        movePlayer(0, -1);
+}
+
+//the method that moves ALL ghosts ehehe
+function moveGhosts() {
+    for (let ghost of ghosts) {
+        if (gameOver) return;
+        let target;
+
+        if (ghost.name === "blinky") target = blinkyTarget();
+        if (ghost.name === "pinky") target = pinkyTarget();
+        if (ghost.name === "inky") target = inkyTarget();
+        if (ghost.name === "clyde") target = clydeTarget(ghost);
+
+        let move = getBestMove(ghost, target.row, target.col);
+
+        if (move) {
+            ghost.row += move.r;
+            ghost.col += move.c;
+        }
+
+        //collision with player results in player losing
+        if (ghost.row === playerPos.row && ghost.col === playerPos.col) {
+            gameOver = true;
+            alert("Game Over!");
+        }
     }
-    else if (event.key === "ArrowRight") {
-        movePlayer(0, 1);
-    }
-});
-/*
-so basically, I have calculated the new position, converted it to index (1D map array),
-checked collision so that pacman doesn't walk into walls and updated the world anew 
-*/
+
+    render();
+}
 
 function updateScore() {
     document.getElementById("score").innerText = "Score: " + score;
 }
-
 updateScore();
-/* 
-this is to display the score on screen after a dot is eaten
-*/
+
+document.getElementById("reset-btn").addEventListener("click", resetGame);
 
 function resetGame() {
+
     score = 0;
     gameOver = false;
-    playerPos = {row: 12, col: 9};
 
-    //restore dots from the original layout
-    layout = layout.map(tile => {
-        if (tile === 2 || tile === 3) return 0;
-        return tile;
-    });
+    playerPos = {
+        row: 12,
+        col: 9
+    };
+
+    layout = [...originalLayout];
+
+    ghosts = structuredClone(originalGhosts);
 
     totalDots = layout.filter(tile => tile === 0).length;
+
+    playerDirection = {r: 0, c: 1};
 
     updateScore();
     render();
 }
 
-setInterval(moveGhost, 500);
+setInterval(moveGhosts, 500);
 
 render(); //initialize the game screen

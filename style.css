@@ -46,7 +46,22 @@ body {
     margin: auto;
 }
 
-.ghost {
+.blinky {
     background-color: #d81159;
+    border-radius: 60%;
+}
+
+.pinky {
+    background-color: #f08cae;
+    border-radius: 60%;
+}
+
+.inky {
+    background-color: #00a9a5;
+    border-radius: 60%;
+}
+
+.clyde {
+    background-color: #f06543;
     border-radius: 60%;
 }
