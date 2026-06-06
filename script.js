@@ -1,5 +1,9 @@
 console.log("JS is running");
 
+let ghost = {
+    row: 13,
+    col: 11
+}
 let score = 0;
 let gameOver = false;
 let totalDots = 0;
@@ -54,6 +58,9 @@ function render() {
         if (row === playerPos.row && col === playerPos.col) {
             tile.classList.add("player");
         }
+        else if (row === ghost.row && col === ghost.col) {
+            tile.classList.add("ghost");
+        }
         else if (layout[i] === 1) {
             tile.classList.add("wall");
         }
@@ -77,9 +84,6 @@ let playerPos = {
     row: 12,
     col: 9
 };
-
-//const width = 28;
-//let index = row * width + col;
 
 function movePlayer(rowChange, colChange) {
     if (gameOver) return;
@@ -109,6 +113,33 @@ function movePlayer(rowChange, colChange) {
         setTimeout(() => alert("You Win!"), 100);
     }
 
+    render();
+}
+
+function moveGhost() {
+    let directions = [
+        {r: -1, c: 0}, //up
+        {r: 1, c: 0}, //down
+        {r: 0, c: -1}, //left
+        {r: 0, c: 1} //right
+    ];
+
+    let randomMove = directions[Math.floor(Math.random() * directions.length)];
+
+    let newRow = ghost.row + randomMove.r;
+    let newCol = ghost.col + randomMove.c;
+    let newIndex = newRow * 28 + newCol;
+
+    //move only if not wall
+    if (layout[newIndex] != 1) {
+        ghost.row = newRow;
+        ghost.col = newCol;
+    }
+
+    if (ghost.row === playerPos.row && ghost.col === playerPos.col) {
+        gameOver = true;
+        alert("Game Over!");
+    }
     render();
 }
 
@@ -156,5 +187,7 @@ function resetGame() {
     updateScore();
     render();
 }
+
+setInterval(moveGhost, 500);
 
 render(); //initialize the game screen

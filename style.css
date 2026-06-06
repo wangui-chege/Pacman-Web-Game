@@ -45,3 +45,8 @@ body {
     height: 70%;
     margin: auto;
 }
+
+.ghost {
+    background-color: #d81159;
+    border-radius: 60%;
+}
