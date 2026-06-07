@@ -1,5 +1,9 @@
 console.log("JS is running");
 
+const COLS = 28;
+const TICK_MS = 500;
+const INITIAL_PLAYER_POS = {row: 12, col: 9};
+
 const originalGhosts = [
     {name: "blinky", row: 14, col: 12, color: "red", behavior: "chase"},
     {name: "pinky", row: 14, col: 15, color: "pink", behavior: "ambush"},
@@ -7,10 +11,17 @@ const originalGhosts = [
     {name: "clyde", row: 15, col: 15, color: "orange", behavior: "scatter"}
 ];
 let ghosts = structuredClone(originalGhosts);
+let ghostMode = "chase";
+let modeTimer = 0;
+let ghostTimerId = null;
+
 let score = 0;
-let gameOver = false;
 let totalDots = 0;
 let playerDirection = {r: 0, c: 1};
+let playerPos = {...INITIAL_PLAYER_POS};
+
+//there can be "playing", "gameover", "win", "paused"
+let gameState = "playing";
 
 //this array maps out the whole map, 1 being a wall, 0 being a dot and 2 being empty space
 let layout = [
@@ -47,23 +58,67 @@ let layout = [
 ];
 
 const originalLayout = [...layout];
+const ROWS = layout.length / COLS;
+
+const gameBoard = document.getElementById("game-board"); 
+const scoreDisplay = document.getElementById("score");
+const cells = [];
+
+function getIndex(row, col) {
+    return row * COLS + col;
+}
+
+originalLayout[getIndex(INITIAL_PLAYER_POS.row, INITIAL_PLAYER_POS.col)] = 2;
+layout = [...originalLayout];
 
 //the whole game is scanned and the total number of dots is recorded
 totalDots = layout.filter(tile => tile === 0).length;
 
-const gameBoard = document.getElementById("game-board"); 
+function isInBounds(row, col) {
+    return row >= 0 && row < ROWS && col >= 0 && col < COLS;
+}
 
-function render() {
+function isWall(row, col) {
+    return !isInBounds(row, col) || layout[getIndex(row, col)] === 1;
+}
+
+function getNeighbors(row, col) {
+    return [
+        {row: row - 1, col, move: {r: -1, c: 0}},
+        {row: row + 1, col, move: {r: 1, c: 0}},
+        {row, col: col - 1, move: {r: 0, c: -1}},
+        {row, col: col + 1, move: {r: 0, c: 1}}
+    ].filter(space => !isWall(space.row, space.col));
+}
+
+function createBoard() {
     gameBoard.innerHTML = "";
+    cells.length = 0;
 
     for (let i = 0; i < layout.length; i++) {
         const tile = document.createElement("div");
+        cells.push(tile);
+        gameBoard.appendChild(tile);
+    }
+}
 
-        let row = Math.floor(i / 28);
-        let col = i % 28;
-        let ghostHere = ghosts.find(
-            g => g.row === row && g.col === col
+function render() {
+    const ghostPositions = new Map();
+
+    for (const ghost of ghosts) {
+        ghostPositions.set(
+            `${ghost.row},${ghost.col}`,
+            ghost
         );
+    }
+
+    for (let i = 0; i < layout.length; i++) {
+        const tile = cells[i];
+        const row = Math.floor(i / COLS);
+        const col = i % COLS;
+        const ghostHere = ghostPositions.get(`${row},${col}`);
+
+        tile.className = "";
 
         if (row === playerPos.row && col === playerPos.col) {
             tile.classList.add("player");
@@ -85,12 +140,10 @@ function render() {
     }
 }
 
-let playerPos = {
-    row: 12,
-    col: 9
-};
-
 document.addEventListener("keydown", function(event) {
+    if (!event.key.startsWith("Arrow")) return;
+
+    event.preventDefault();
 
     if (event.key === "ArrowUp") {
         playerDirection = {r: -1, c: 0};
@@ -114,21 +167,13 @@ document.addEventListener("keydown", function(event) {
 });
 
 function movePlayer(rowChange, colChange) {
-    if (gameOver) return;
+    if (gameState !== "playing") return;
 
     let newRow = playerPos.row + rowChange;
     let newCol = playerPos.col + colChange;
-    let newIndex = newRow * 28 + newCol;
+    let newIndex = getIndex(newRow, newCol);
 
-    if (
-        newRow < 0 ||
-        newRow >= 30 ||
-        newCol < 0 ||
-        newCol >= 28
-    ) return;
-
-    // wall check
-    if (layout[newIndex] === 1) return;
+    if (isWall(newRow, newCol)) return;
 
     // move player
     playerPos.row = newRow;
@@ -144,104 +189,109 @@ function movePlayer(rowChange, colChange) {
 
     // win condition
     if (totalDots === 0) {
-        gameOver = true;
+        gameState = "win";
         setTimeout(() => alert("You Win!"), 100);
     }
 
+    checkCollision();
     render();
 }
 
 //one AI system that all ghosts use, the common movement
 function getBestMove(ghost, targetRow, targetCol) {
-    let moves = [
-        {r: -1, c: 0},
-        {r: 1, c: 0},
-        {r: 0, c: -1},
-        {r: 0, c: 1}
-    ];
+    if (gameState !== "playing") return;
 
-    let bestMove = null;
-    let bestDistance = Infinity;
+    const target = {
+        row: Math.max(0, Math.min(ROWS - 1, targetRow)),
+        col: Math.max(0, Math.min(COLS - 1, targetCol))
+    };
+    const startKey = `${ghost.row},${ghost.col}`;
+    const queue = [{row: ghost.row, col: ghost.col, firstMove: null}];
+    const visited = new Set([startKey]);
+    let closest = null;
+    let closestDistance = Infinity;
 
-    for (let move of moves) {
-        let newRow = ghost.row + move.r;
-        let newCol = ghost.col + move.c;
-        let index = newRow * 28 + newCol;
+    for (let head = 0; head < queue.length; head++) {
+        const current = queue[head];
+        const distance = Math.abs(current.row - target.row) + Math.abs(current.col - target.col);
 
-        if (layout[index] === 1) continue;
-        if (
-            newRow < 0 ||
-            newRow >= 30 ||
-            newCol < 0 ||
-            newCol >= 28
-        ) continue;
+        if (distance < closestDistance) {
+            closestDistance = distance;
+            closest = current;
+        }
 
-        let distance = Math.abs(newRow - targetRow) + Math.abs(newCol - targetCol);
+        if (current.row === target.row && current.col === target.col) {
+            return current.firstMove;
+        }
 
-        if (distance < bestDistance) {
-            bestDistance = distance;
-            bestMove = move;
+        for (const next of getNeighbors(current.row, current.col)) {
+            const key = `${next.row},${next.col}`;
+
+            if (visited.has(key)) continue;
+
+            visited.add(key);
+            queue.push({
+                row: next.row,
+                col: next.col,
+                firstMove: current.firstMove || next.move
+            });
         }
     }
 
-    return bestMove;
+    return closest ? closest.firstMove : null;
 }
 
-//blinky's movement is that she chases pacdot 
-//for that, blinky is supposed to move to where pacdot is
-function blinkyTarget() {
-    return {
-        row: playerPos.row, 
-        col: playerPos.col
-    };
-}
-
-//wants to cut poor pacdot off
-//targets space 4 tiles ahead of pacdot
-function pinkyTarget() {
-    return {
-        row: playerPos.row + playerDirection.r * 4,
-        col: playerPos.col + playerDirection.c * 4
-    };
-}
-
-//movements are unpredictable
-//calculated using both blinky's and pacdot's positions
-function inkyTarget() {
-    let aheadRow = playerPos.row + playerDirection.r * 2;
-    let aheadCol = playerPos.col + playerDirection.c * 2;
-
-    let blinky = ghosts.find(g => g.name === "blinky");
-
-    return {
-        row: aheadRow + (aheadRow - blinky.row),
-        col: aheadCol + (aheadCol - blinky.col)
-    };
-}
-
-//chases pacdot till he gets close
-//goes back to bottom left corner after that
-function clydeTarget(clyde) {
-    let distance = Math.abs(clyde.row - playerPos.row) + Math.abs(clyde.col - playerPos.col);
-
-    if (distance > 6) {
-        return {row: playerPos.row, col: playerPos.col };
+function getChaseTarget(ghost) {
+    if (ghost.name === "blinky") {
+        return {row: playerPos.row, col: playerPos.col};
     }
-    else {
-        return {row: 29, col: 1}; //bottom left corner
+
+    if (ghost.name === "pinky") {
+        return {
+            row: playerPos.row + playerDirection.r * 4,
+            col: playerPos.col + playerDirection.c * 4
+        };
+    }
+
+    if (ghost.name === "inky") {
+        const blinky = ghosts.find(g => g.name === "blinky");
+
+        const aheadRow = playerPos.row + playerDirection.r * 2;
+        const aheadCol = playerPos.col + playerDirection.c * 2;
+
+        const vectorRow = aheadRow - blinky.row;
+        const vectorCol = aheadCol - blinky.col;
+
+        return {
+            row: aheadRow + vectorRow,
+            col: aheadCol + vectorCol
+        };
+    }
+
+    if (ghost.name === "clyde") {
+        let dist = Math.abs(ghost.row - playerPos.row) + Math.abs(ghost.col - playerPos.col);
+
+        if (dist > 6) {
+            return {row: playerPos.row, col: playerPos.col};
+        }
+
+        return {row: 29, col: 0};
     }
 }
 
 //the method that moves ALL ghosts ehehe
 function moveGhosts() {
+    if (gameState !== "playing") return;
+
     for (let ghost of ghosts) {
-        if (gameOver) return;
         let target;
 
-        if (ghost.name === "blinky") target = blinkyTarget();
-        if (ghost.name === "pinky") target = pinkyTarget();
-        if (ghost.name === "inky") target = inkyTarget();
-        if (ghost.name === "clyde") target = clydeTarget(ghost);
+        // MODE AFFECTS BEHAVIOR
+        if (ghostMode === "scatter") {
+            target = getScatterTarget(ghost);
+        } else {
+            target = getChaseTarget(ghost);
+        }
 
         let move = getBestMove(ghost, target.row, target.col);
 
@@ -250,32 +300,74 @@ function moveGhosts() {
             ghost.col += move.c;
         }
 
-        //collision with player results in player losing
-        if (ghost.row === playerPos.row && ghost.col === playerPos.col) {
-            gameOver = true;
-            alert("Game Over!");
-        }
+        checkCollision();
+
+        if (gameState !== "playing") break;
     }
 
     render();
 }
 
+function checkCollision() {
+    if (gameState !== "playing") return;
+
+    const hitGhost = ghosts.some(ghost =>
+        ghost.row === playerPos.row && ghost.col === playerPos.col
+    );
+
+    if (hitGhost) {
+        gameState = "gameover";
+        setTimeout(() => alert("Game Over!"), 100);
+    }
+}
+
+function getScatterTarget(ghost) {
+    switch (ghost.name) {
+        case "blinky":
+            return {row: 0, col: 27}; // top-right
+        case "pinky":
+            return {row: 0, col: 0}; // top-left
+        case "inky":
+            return {row: 29, col: 27}; // bottom-right
+        case "clyde":
+            return {row: 29, col: 0}; // bottom-left
+    }
+}
+
+function updateGhostMode() {
+    if (gameState !== "playing") return;
+
+    modeTimer++;
+
+    // scatter → chase → scatter loop
+    if (modeTimer === 14)
+    {
+        ghostMode = "scatter";
+    }
+
+    if (modeTimer === 21)
+    {
+        ghostMode = "chase";
+        modeTimer = 0;
+    }
+}
+
 function updateScore() {
-    document.getElementById("score").innerText = "Score: " + score;
+    scoreDisplay.innerText = "Score: " + score;
 }
 updateScore();
 
 document.getElementById("reset-btn").addEventListener("click", resetGame);
 
 function resetGame() {
+    gameState = "playing";
+    ghostMode = "chase";
+    modeTimer = 0;
 
     score = 0;
-    gameOver = false;
 
-    playerPos = {
-        row: 12,
-        col: 9
-    };
+    playerPos = {...INITIAL_PLAYER_POS};
+    playerDirection = {r: 0, c: 1};
 
     layout = [...originalLayout];
 
@@ -283,12 +375,21 @@ function resetGame() {
 
     totalDots = layout.filter(tile => tile === 0).length;
 
-    playerDirection = {r: 0, c: 1};
-
     updateScore();
     render();
 }
 
-setInterval(moveGhosts, 500);
+function startGameLoop() {
+    if (ghostTimerId) {
+        clearInterval(ghostTimerId);
+    }
 
+    ghostTimerId = setInterval(() => {
+        updateGhostMode();
+        moveGhosts();
+    }, TICK_MS);
+}
+
+createBoard();
+startGameLoop();
 render(); //initialize the game screen
