@@ -11,7 +11,16 @@
         <h1>Pac-Man Clone</h1>
         <div id="score">Score: 0</div>
 
+        <!-- JavaScript fills this grid with wall, dot, player, and ghost cells. -->
         <div id="game-board"></div>
+
+        <!-- Touch controls let the same game work comfortably on phones. -->
+        <div id="touch-controls" aria-label="Touch movement controls">
+            <button class="control-btn up" type="button" data-direction="up" aria-label="Move up">^</button>
+            <button class="control-btn left" type="button" data-direction="left" aria-label="Move left">&lt;</button>
+            <button class="control-btn right" type="button" data-direction="right" aria-label="Move right">&gt;</button>
+            <button class="control-btn down" type="button" data-direction="down" aria-label="Move down">v</button>
+        </div>
 
         <button id="reset-btn">RESET</button>
 

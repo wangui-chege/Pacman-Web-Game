@@ -5,8 +5,12 @@ body {
     font-family: Arial, sans-serif;
     margin: 0;
     min-height: 100vh;
+    padding: 16px;
+    box-sizing: border-box;
+    touch-action: manipulation;
 }
 
+/* The board uses the same 28-column by 30-row shape as the JavaScript layout. */
 #game-board {
     width: min(92vw, 560px);
     aspect-ratio: 28 / 30;
@@ -16,8 +20,10 @@ body {
     display: grid;
     grid-template-columns: repeat(28, 1fr);
     grid-template-rows: repeat(30, 1fr);
+    overflow: hidden;
 }
 
+/* Tiles are small pieces inside each grid cell, so the maze keeps a little spacing. */
 .wall {
     background-color: #0b5351;
     border-radius: 4px;
@@ -48,6 +54,7 @@ body {
     margin: auto;
 }
 
+/* The four ghost class names come directly from each ghost object's name property. */
 .blinky {
     background-color: #d81159;
     border-radius: 60%;
@@ -80,6 +87,54 @@ body {
     margin: auto;
 }
 
+/* This directional pad is useful on phones and still available on desktop. */
+#touch-controls {
+    width: min(56vw, 180px);
+    margin: 16px auto 0;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    grid-template-areas:
+        ". up ."
+        "left . right"
+        ". down .";
+    gap: 8px;
+}
+
+/* Buttons are square and stable, which prevents layout shifts while tapping. */
+.control-btn {
+    aspect-ratio: 1;
+    border: 0;
+    border-radius: 6px;
+    background-color: #263859;
+    color: white;
+    cursor: pointer;
+    font-size: 1.25rem;
+    font-weight: 700;
+}
+
+.control-btn:active,
+.control-btn:focus-visible {
+    background-color: #fbb13c;
+    color: #111;
+    outline: none;
+}
+
+.control-btn.up {
+    grid-area: up;
+}
+
+.control-btn.left {
+    grid-area: left;
+}
+
+.control-btn.right {
+    grid-area: right;
+}
+
+.control-btn.down {
+    grid-area: down;
+}
+
 #reset-btn {
     margin-top: 16px;
     padding: 10px 16px;
@@ -93,4 +148,10 @@ body {
 
 #reset-btn:hover {
     background-color: #ffd166;
+}
+
+@media (min-width: 800px) {
+    #touch-controls {
+        width: 150px;
+    }
 }
